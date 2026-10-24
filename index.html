@@ -63,8 +63,8 @@ body.night #credits{color:rgba(243,239,228,.7);text-shadow:none}
 #toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:8px 14px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1}
 /* start screen */
-#start{position:fixed;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,rgba(10,14,13,.35),rgba(10,14,13,.78));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-#start .card{max-width:440px;width:100%;padding:24px 22px;display:grid;gap:14px;background:var(--glass-strong)}
+#start{position:fixed;inset:0;display:grid;place-items:safe center;overflow-y:auto;padding-block:16px;background:linear-gradient(180deg,rgba(10,14,13,.35),rgba(10,14,13,.78));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#start .card{max-width:440px;width:100%;padding:24px 22px;display:grid;gap:12px;background:var(--glass-strong)}
 #start h2{margin:0;font:900 clamp(28px,7vw,40px)/1.05 var(--f-display);letter-spacing:.03em;text-wrap:balance}
 #start .coords{font:500 11px var(--f-data);color:var(--amber);letter-spacing:.04em}
 #start p{margin:0;font-size:14px;line-height:1.6;color:var(--ink-dim)}
@@ -84,6 +84,7 @@ kbd{font:500 11px var(--f-data);padding:2px 6px;border:1px solid var(--line);bor
 #tbtns button{height:58px;border-radius:50%;padding:0;font-size:13px}
 .touch #hud-bl{bottom:calc(230px + env(safe-area-inset-bottom,0px))}
 .touch #credits{display:none}
+@media (max-height:520px){#start .card{padding:16px 18px;gap:8px}#start h2{font-size:24px}#keys{font-size:12px;gap:4px 10px}}
 @media (max-width:560px){#map-wrap{width:120px;height:120px}#hud-tl h1{font-size:17px}}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
@@ -138,7 +139,9 @@ kbd{font:500 11px var(--f-data);padding:2px 6px;border:1px solid var(--line);bor
     <h2>黃大仙漫步</h2>
     <p>用第一身視角喺黃大仙一帶周圍行。腳會跟住地形上斜落斜，天橋可以由橋頭直接行上去。對住大廈或者公園望，畫面中間就會顯示佢個名；左上角會列出最近嘅三個地點同方向。</p>
     <div id="keys">
-      <span><kbd>W A S D</kbd></span><span>行（或方向鍵）</span>
+      <span><kbd>W A S D</kbd></span><span>行（A D 打橫行）</span>
+      <span><kbd>W W</kbd></span><span>連撳兩下 W：快步走</span>
+      <span><kbd>← →</kbd></span><span>轉身（或 Q E）</span>
       <span><kbd>滑鼠</kbd></span><span>轉頭望</span>
       <span><kbd>Shift</kbd></span><span>跑</span>
       <span><kbd>空白鍵</kbd></span><span>跳</span>
@@ -169,7 +172,7 @@ if (isTouch) $('keys').innerHTML = '<span><kbd>左下搖桿</kbd></span><span>�
 /* ---------- constants ---------- */
 const ORIGIN = { lat: 22.34115, lon: 114.18933 };
 const HALF = 500;
-const P = { radius: 0.35, walk: 4.5, run: 11, fly: 30, flyFast: 90, gravity: -22, jump: 6.5 };
+const P = { radius: 0.35, walk: 4.5, brisk: 7.5, run: 11, fly: 30, flyFast: 90, gravity: -22, jump: 6.5 };
 
 /* ---------- renderer / scene ---------- */
 const canvas = $('view');
@@ -641,7 +644,7 @@ function physics(dt, input) {
     return;
   }
 
-  const speed = input.run ? P.run : P.walk;
+  const speed = input.run ? P.run : input.brisk ? P.brisk : P.walk;
   const feet0 = player.pos.y;
   player.pos.x += move.x * speed * dt;
   player.pos.z += move.z * speed * dt;
@@ -695,12 +698,18 @@ let bridgeIdx = -1;
 
 /* ---------- input ---------- */
 const keys = new Set();
-const input = { x: 0, y: 0, run: false, jump: false, vert: 0 };
+const input = { x: 0, y: 0, run: false, jump: false, vert: 0, turn: 0, brisk: false };
 const touchState = { x: 0, y: 0, run: false, jump: false, up: false, down: false };
 let started = false;
 
+let lastWTap = 0, brisk = false;
 addEventListener('keydown', e => {
   if (!started) return;
+  if (e.code === 'KeyW' && !e.repeat) {            // double-tap W → brisk walk until W is released
+    const now = performance.now();
+    if (now - lastWTap < 350) { brisk = true; toast('快步走（放開 W 停止）'); }
+    lastWTap = now;
+  }
   keys.add(e.code);
   if (e.code === 'KeyF') toggleFly();
   if (e.code === 'KeyB') nextBridge();
@@ -708,20 +717,27 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyL') toggleLabels();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
-addEventListener('keyup', e => keys.delete(e.code));
-addEventListener('blur', () => keys.clear());
+addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyW') brisk = false; });
+addEventListener('blur', () => { keys.clear(); brisk = false; });
 
 const LOOK = 0.0022;
 function look(dx, dy, k = LOOK) {
+  if (Math.abs(dx) > 400 || Math.abs(dy) > 400) return;     // browsers sometimes report a huge jump right after locking
   player.yaw -= dx * k;
   player.pitch = THREE.MathUtils.clamp(player.pitch - dy * k, -1.45, 1.45);
 }
-// desktop: pointer lock, with drag-to-look fallback
+// desktop: pointer lock (raw, unaccelerated mouse where supported), with drag-to-look fallback
+function lockPointer() {
+  try {
+    const p = canvas.requestPointerLock?.({ unadjustedMovement: true });
+    if (p && p.catch) p.catch(() => { try { const q = canvas.requestPointerLock(); q?.catch?.(() => {}); } catch {} });
+  } catch { try { canvas.requestPointerLock?.(); } catch {} }
+}
 let dragging = false, locked = false;
 canvas.addEventListener('mousedown', () => {
   if (!started || isTouch) return;
   dragging = true;
-  try { const p = canvas.requestPointerLock?.(); p?.catch?.(() => {}); } catch {}
+  lockPointer();
 });
 addEventListener('mouseup', () => dragging = false);
 document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; });
@@ -767,7 +783,9 @@ if (isTouch) {
 
 function readInput() {
   const k = c => keys.has(c);
-  input.x = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0) + touchState.x;
+  input.x = (k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0) + touchState.x;
+  input.turn = (k('ArrowLeft') || k('KeyQ') ? 1 : 0) - (k('ArrowRight') || k('KeyE') ? 1 : 0);
+  input.brisk = brisk && k('KeyW');
   input.y = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0) + touchState.y;
   input.run = k('ShiftLeft') || k('ShiftRight') || touchState.run;
   input.jump = k('Space') || touchState.jump;
@@ -804,7 +822,9 @@ $('b-label').onclick = () => toggleLabels();
 $('b-help').onclick = () => { $('start').hidden = false; $('go').textContent = '繼續'; started = false; document.exitPointerLock?.(); };
 
 /* ---------- minimap ---------- */
-const mapC = $('map'), mg = mapC.getContext('2d'), satImg = satTex.image;
+const mapC = $('map'), mg = mapC.getContext('2d');
+const satImg = document.createElement('canvas'); satImg.width = satImg.height = mapC.width;
+satImg.getContext('2d').drawImage(satTex.image, 0, 0, mapC.width, mapC.width);
 function drawMap() {
   const W = mapC.width;
   mg.drawImage(satImg, 0, 0, W, W);
@@ -890,10 +910,11 @@ function updatePlaces() {
 function updateHud() {
   const feet = player.pos.y;
   const onBridge = !player.fly && player.surface === K_BRIDGE;
-  const running = input.run && (Math.abs(input.x) + Math.abs(input.y) > 0.1);
+  const moving = Math.abs(input.x) + Math.abs(input.y) > 0.1;
+  const gait = !moving ? '' : input.run ? '跑步' : input.brisk ? '快步' : '';
   const m = $('mode');
-  m.className = 'chip' + (player.fly ? ' fly' : onBridge ? ' bridge' : running ? ' run' : '');
-  m.textContent = player.fly ? '飛行' : onBridge ? (running ? '天橋上 · 跑' : '天橋上') : running ? '跑步' : '步行';
+  m.className = 'chip' + (player.fly ? ' fly' : onBridge ? ' bridge' : gait ? ' run' : '');
+  m.textContent = player.fly ? '飛行' : onBridge ? (gait ? '天橋上 · ' + gait : '天橋上') : gait || '步行';
   $('alt').textContent = feet.toFixed(1) + ' 米';
   let deg = ((-player.yaw * 180 / Math.PI) % 360 + 360) % 360;
   $('dir').textContent = DIRS[Math.round(deg / 45) % 8] + ' ' + Math.round(deg) + '°';
@@ -904,20 +925,40 @@ function updateHud() {
 /* ---------- loop ---------- */
 const clock = new THREE.Clock();
 let camY = player.pos.y + P2.eyeH;
+let camYaw = player.yaw, camPitch = player.pitch, hudSlot = 0, turnVel = 0;
+const MAX_PR = Math.min(devicePixelRatio, isTouch ? 1.5 : 2); let pixelRatio = MAX_PR, frameAcc = 0, frameN = 0;
+const _snap = new THREE.Vector3();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (started) {
     readInput();
+    // arrow keys / Q E turn with a short ease-in so it never jerks
+    turnVel += (input.turn * 2.4 - turnVel) * Math.min(1, dt * 10);
+    if (Math.abs(turnVel) > 1e-3) player.yaw += turnVel * dt;
     const N = 5; for (let i = 0; i < N; i++) physics(dt / N, input);
   }
   const targetY = player.pos.y + P2.eyeH;
   camY = Math.abs(targetY - camY) > 2.5 || player.fly ? targetY : camY + (targetY - camY) * Math.min(1, dt * 14);
   camera.position.set(player.pos.x, camY, player.pos.z);
-  camera.rotation.set(player.pitch, player.yaw, 0);
-  sun.position.copy(player.pos).addScaledVector(SUN_DIR, 400);
-  sun.target.position.copy(player.pos);
+  // ease the view toward the mouse target: removes jitter from uneven mouse events without feeling laggy
+  const dyaw = player.yaw - camYaw, dp = player.pitch - camPitch;
+  if (Math.abs(dyaw) > 1.2 || Math.abs(dp) > 1.2) { camYaw = player.yaw; camPitch = player.pitch; }
+  else { const a = 1 - Math.exp(-dt * 38); camYaw += dyaw * a; camPitch += dp * a; }
+  camera.rotation.set(camPitch, camYaw, 0);
+  // shadow camera follows in 4 m steps so shadows don't shimmer
+  _snap.set(Math.round(player.pos.x / 4) * 4, Math.round(player.pos.y / 4) * 4, Math.round(player.pos.z / 4) * 4);
+  sun.position.copy(_snap).addScaledVector(SUN_DIR, 400);
+  sun.target.position.copy(_snap);
   renderer.render(scene, camera);
-  if ((hudT += dt) > 0.1) { hudT = 0; updateHud(); drawMap(); updateLabels(); updatePlaces(); }
+  // adaptive resolution: if frames take too long, render fewer pixels so turning stays smooth
+  frameAcc += dt; frameN++;
+  if (frameAcc > 2) {
+    const avg = frameAcc / frameN; frameAcc = 0; frameN = 0;
+    if (avg > 1 / 45 && pixelRatio > 0.75) { pixelRatio = Math.max(0.75, pixelRatio - 0.25); renderer.setPixelRatio(pixelRatio); }
+    else if (avg < 1 / 58 && pixelRatio < MAX_PR) { pixelRatio = Math.min(MAX_PR, pixelRatio + 0.25); renderer.setPixelRatio(pixelRatio); }
+  }
+  // spread the HUD work over separate frames instead of doing it all in one
+  if ((hudT += dt) > 0.05) { hudT = 0; [updateHud, drawMap, updateLabels, updatePlaces][hudSlot++ % 4](); }
   // traffic lights: green 9 s → amber 2 s → red 9 s
   const ph = clock.elapsedTime % 20, lit = ph < 9 ? 2 : ph < 11 ? 1 : 0;
   sigMats.forEach((m, k) => m.color.copy(k === lit ? SIG_ON[k] : SIG_OFF[k]));
@@ -935,9 +976,9 @@ go.disabled = false; go.textContent = isTouch ? '開始行' : '開始行（撳�
 step(100);
 go.onclick = () => {
   $('start').hidden = true; started = true; clock.getDelta();
-  if (!isTouch) { try { const p = canvas.requestPointerLock?.(); p?.catch?.(() => {}); } catch {} }
+  if (!isTouch) { lockPointer(); }
 };
-window.__walk = { tryEntry, meta, wallCells, cellOf, GN, P2, player, scene, camera, physics, placeAt, surfaceAt, bridgeList, K_BRIDGE };
+window.__walk = { input, tryEntry, meta, wallCells, cellOf, GN, P2, player, scene, camera, physics, placeAt, surfaceAt, bridgeList, K_BRIDGE };
 </script>
 <!--ARTIFACT-BODY-END-->
 </body>
