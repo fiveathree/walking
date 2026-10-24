@@ -3,7 +3,7 @@
 用第一身視角喺香港黃大仙一帶（22.34115°N, 114.18933°E，1 公里 × 1 公里）周圍行嘅 3D 網頁。
 
 - 腳跟住地形高低行，上斜落斜都得
-- 天橋可以由橋頭直接行上去；兩頭都懸空嘅橋頭會自動補返樓梯；橋邊有欄杆
+- 天橋可以由橋頭直接行上去；樓梯用 OpenStreetMap 嘅真實位置（山坡石級、天橋樓梯），冇資料嘅懸空橋頭先自動補樓梯；橋邊同樓梯有欄杆
 - 唔會穿過建築物
 - 飛行模式、小地圖點擊瞬間移動、「去天橋」逐條天橋跳過去
 - 手機有虛擬搖桿
@@ -40,7 +40,7 @@
 
 ```
 python3 tools/convert.py 新模型.dae data
-python3 tools/stairs.py 新模型.dae data
+python3 tools/stairs.py 新模型.dae data osm
 python3 tools/details.py data osm
 cp 新衛星圖.jpg data/satellite.jpg
 ```

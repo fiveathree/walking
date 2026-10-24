@@ -26,7 +26,7 @@ python3 -m http.server 8000      # then open http://localhost:8000
 | `data/satellite.jpg` | 1820² Esri image, draped on the terrain. North is at the top |
 | `osm/roads.json`, `osm/pois.json` | Compact OpenStreetMap extract (format below) |
 | `tools/convert.py` | urban:EXPORT `.dae` → `city.bin` / `city.json` |
-| `tools/stairs.py` | Adds stairs and ramps where a bridge end floats above the street, adds parapets, and builds the bridge entrance list |
+| `tools/stairs.py` | Builds stairs from OSM `highway=steps` (see below), adds generated stairs where a bridge end still floats above the street, adds parapets, and builds the bridge entrance list |
 | `tools/details.py` | Uses OSM to add road surfaces, markings, covered walkways, lamps, traffic lights, street name plates, bus shelters, canopy posts and labels |
 | `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` | Icons |
 
@@ -37,9 +37,11 @@ The three scripts must run in this order. Each one appends to `city.bin`, so alw
 ```
 D=path/to/urban-export_22.3412_114.1893_1000m.dae
 python3 tools/convert.py "$D" data
-python3 tools/stairs.py  "$D" data
+python3 tools/stairs.py  "$D" data osm
 python3 tools/details.py data osm
 ```
+
+The scripts need `numpy`. On the owner's Windows PC, `python`/`python3` are Microsoft Store stubs; the real interpreter is `%LOCALAPPDATA%\Programs\Python\Python312\python.exe` (it has no numpy, so use a venv). Pass `-X utf8`, or the OSM JSON fails to load with a cp1252 error.
 
 The source `.dae`, `.fbx` and `.jpg` came from https://urban-export.ildar.space/ (SketchUp `.dae` export). They are not in the repo. The owner keeps them in their Downloads folder.
 
@@ -60,7 +62,16 @@ The source `.dae`, `.fbx` and `.jpg` came from https://urban-export.ildar.space/
 - **Ground:** `surfaceAt(x, z, maxY, mask)` returns the highest up-facing triangle (normal y > 0.35) in an 8 m grid at or below `maxY`. Kinds are `K_TERRAIN`, `K_BRIDGE` (decks, ramps and rail tops) and `K_BUILDING` (roofs).
 - **Walls:** near-vertical triangles become 2D segments with a `[lo, hi]` height range. `pushOutOfWalls` pushes a circle of radius 0.35 out of any wall whose range overlaps `[feet + 0.55, feet + 1.75]`. This lets you walk under bridges and step over kerbs.
 - **Each step:** move in x/z, push out of walls, apply gravity, then snap to the surface found from `feet + stepUp (0.6)` downward. While on the ground it also snaps down up to 0.7 m.
-- **Bridge entrances:** at load time `tryEntry` test-walks every bridge end for 4 s. Only ends that work are kept in `bridgeList`. About 42 of 64 bridges can be reached on foot. The rest end against buildings in the data.
+- **Bridge entrances:** at load time `tryEntry` test-walks every bridge end for 4 s. Only ends that work are kept in `bridgeList`. About 49 of 64 bridges can be reached on foot. The rest end against buildings in the data.
+
+## Stairs from OpenStreetMap (`stairs.py` with the `osm` argument)
+
+- **End heights:** each end of a steps way is on the ground if it meets a street-level way or nothing at all (a dead end is on the pavement). It is on the deck if it meets a bridge way and a deck is within 3 m. If it only meets other steps, it takes their height.
+- **Steps tagged bridge or layer > 0 (26):** urban:EXPORT modelled these as flat deck at the top height, which is why their ends floated. The deck sections within 2 m of the steps line (and within 1.5 m of the top height) are tilted into a straight slope from top to bottom. The tilted `BRIDGES` positions are patched into `city.bin` in place. A flight of steps is drawn on the slope, and the deck itself is the walking surface.
+- **Other steps (87):** the profile follows the highest ground across the 2.4 m width, only ever climbs, and is shifted so the ends meet their heights. Steps (about 0.16 m rise) are placed where the profile crosses each rise, so steep parts get more steps. An invisible `RAMPS` strip follows the profile, and railings are added when the climb is over 1 m.
+- Terrain heights come from the actual terrain triangles, not bilinear, because the page walks on the triangles.
+- About 50 steps ways rise less than 0.25 m on the 15 m terrain grid, so they are skipped.
+- **Generated stairs:** a bridge end that still floats gets a straight generated stair only if no OSM stair climbs to it (within 6 m and 1.2 m of its height). Currently 13 ends are served by OSM stairs, 25 still use generated stairs and 7 cannot get one.
 - **Speeds:** walk 4.5 m/s, brisk 7.5 (double-tap W), run 11 (Shift), fly 30 / 90.
 
 ## Controls
@@ -102,6 +113,6 @@ Map, street names and landmarks © OpenStreetMap contributors (ODbL) · Overture
 
 - Building shapes and heights come from urban:EXPORT and are simplified. The facade pattern is generic.
 - OSM road ribbons overlap at some junctions, and their markings can z-fight slightly.
-- About 22 bridges cannot be reached on foot, because their ends run into buildings or podiums.
-- OSM `highway=steps` (175 ways) are not modelled yet. They could replace the generated stairs.
-- Possible next steps: real stairs from OSM, collision for posts and shelters, a fuller night mode (lit lamps on the terrain), a second district (needs a new export plus OSM data), and a mobile performance pass.
+- About 15 bridges cannot be reached on foot, because their ends run into buildings or podiums.
+- OSM steps have no width or step count, so every ground stair is 2.4 m wide. Where OSM and the urban:EXPORT deck disagree (for example bridge-57 slopes the opposite way to its steps), the generated stair is still used.
+- Possible next steps: collision for posts and shelters, a fuller night mode (lit lamps on the terrain), a second district (needs a new export plus OSM data), and a mobile performance pass.

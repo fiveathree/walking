@@ -314,7 +314,7 @@ const bridgeRender = bridgeG.toNonIndexed(); bridgeRender.computeVertexNormals()
 const bridges = new THREE.Mesh(bridgeRender, new THREE.MeshLambertMaterial({ color: '#b4b3ae' }));
 bridges.castShadow = bridges.receiveShadow = true; scene.add(bridges);
 
-/* ---------- stairs added at bridge ends that float above the street ---------- */
+/* ---------- stairs: OpenStreetMap steps, plus generated ones at bridge ends OSM does not cover ---------- */
 if (meta.layers.STAIRS && meta.layers.STAIRS.idx[1]) {
   const g = geomOf(meta.layers.STAIRS).toNonIndexed(); g.computeVertexNormals();
   const st = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#a9a8a2', side: THREE.DoubleSide }));
