@@ -139,6 +139,7 @@ def dashes(P, step_on, step_off):
     return out
 
 roads_for_props = []   # (P, width, name, kind, bridge)
+canopy_posts = []
 for r in R:
     t = rtype(r)
     flags, layer_n = r[2], r[3]
@@ -177,6 +178,7 @@ for r in R:
         for i in range(len(D) - 1):
             a, b, c, d = base + 2 * i, base + 2 * i + 1, base + 2 * i + 3, base + 2 * i + 2
             II.extend([a, d, b, b, d, c])
+        canopy_posts.append((D, nor, hs))
 
 # ---------- props from point features ----------
 def nearest_road(x, z, maxd=9.0):
@@ -191,6 +193,19 @@ def nearest_road(x, z, maxd=9.0):
     return best
 
 details = {'signals': [], 'lamps': [], 'signs': [], 'shelters': [], 'labels': [], 'names': [], 'stops': []}
+# canopy support posts every ~7 m on both edges (bottom = walking surface, top = roof)
+details['posts'] = []
+for D, nor, hs in canopy_posts:
+    acc = 7.0
+    for i in range(len(D)):
+        if i > 0: acc += float(np.linalg.norm(D[i] - D[i - 1]))
+        if acc < 7.0 and i != len(D) - 1: continue
+        acc = 0.0
+        for sgn in (-1, 1):
+            q = D[i] + nor[i] * sgn * 1.75
+            if not inside(q, 1): continue
+            top = hs[i]
+            details['posts'].append([round(q[0], 2), round(top - 2.9, 2), round(q[1], 2), 0])
 name_ix = {}
 def nm_index(s):
     if s not in name_ix: name_ix[s] = len(details['names']); details['names'].append(s)
