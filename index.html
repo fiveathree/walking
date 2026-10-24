@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<!--ARTIFACT-START-->
+<title>黃大仙漫步</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: full-bleed 3D view; HUD pieces float in the four corners like street signage */
+:root{
+  --glass: rgba(18,22,21,.62);
+  --glass-strong: rgba(14,17,16,.86);
+  --ink: #f3efe4;
+  --ink-dim: #b9b4a6;
+  --amber: #f2b33d;      /* road-sign amber */
+  --jade: #6fc29a;       /* on-bridge indicator */
+  --line: rgba(243,239,228,.16);
+  --f-display: "Noto Sans HK", "PingFang HK", "Microsoft JhengHei", sans-serif;
+  --f-body: "Noto Sans HK", "PingFang HK", "Microsoft JhengHei", system-ui, sans-serif;
+  --f-data: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:#9fb7c4;color:var(--ink);font-family:var(--f-body);-webkit-user-select:none;user-select:none;touch-action:none}
+#view{position:fixed;inset:0;display:block;width:100%;height:100%}
+.panel{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:10px}
+#hud-tl{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));padding:10px 14px;display:grid;gap:2px;max-width:min(60vw,320px)}
+#hud-tl h1{margin:0;font:900 20px/1.1 var(--f-display);letter-spacing:.04em}
+#hud-tl .sub{font-size:11px;color:var(--ink-dim);letter-spacing:.06em}
+#hud-bl{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));padding:10px 14px;display:grid;grid-template-columns:auto auto;gap:4px 14px;font-size:12px;align-items:baseline}
+#hud-bl dt{color:var(--ink-dim);letter-spacing:.08em}
+#hud-bl dd{margin:0;font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.chip{display:inline-block;padding:2px 8px;border-radius:99px;font:700 11px/1.5 var(--f-body);letter-spacing:.08em;background:rgba(243,239,228,.12);color:var(--ink)}
+.chip.run{background:var(--amber);color:#1a1404}
+.chip.fly{background:#8fb8ff;color:#0b1730}
+.chip.bridge{background:var(--jade);color:#06170f}
+#hud-tr{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:8px;justify-items:end}
+#map-wrap{position:relative;width:180px;height:180px;overflow:hidden;padding:0;cursor:crosshair}
+#map{width:100%;height:100%;display:block}
+#map-wrap .hint{position:absolute;left:0;right:0;bottom:0;padding:3px 6px;font-size:10px;text-align:center;background:var(--glass-strong);color:var(--ink-dim)}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+button{font:700 12px/1 var(--f-body);color:var(--ink);background:var(--glass);border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+button:hover{border-color:var(--amber)}
+button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+button.on{background:var(--amber);color:#1a1404;border-color:var(--amber)}
+#credits{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:10px;color:rgba(20,24,22,.75);text-shadow:0 0 4px rgba(255,255,255,.6);max-width:46vw;text-align:right}
+#crosshair{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 1px rgba(0,0,0,.35);pointer-events:none}
+#toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:8px 14px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1}
+/* start screen */
+#start{position:fixed;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,rgba(10,14,13,.35),rgba(10,14,13,.78));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#start .card{max-width:440px;width:100%;padding:24px 22px;display:grid;gap:14px;background:var(--glass-strong)}
+#start h2{margin:0;font:900 clamp(28px,7vw,40px)/1.05 var(--f-display);letter-spacing:.03em;text-wrap:balance}
+#start .coords{font:500 11px var(--f-data);color:var(--amber);letter-spacing:.04em}
+#start p{margin:0;font-size:14px;line-height:1.6;color:var(--ink-dim)}
+#keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;align-items:center}
+kbd{font:500 11px var(--f-data);padding:2px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:rgba(243,239,228,.06);white-space:nowrap}
+#go{font-size:16px;padding:14px;background:var(--amber);color:#1a1404;border-color:var(--amber)}
+#go:disabled{opacity:.6;cursor:progress}
+#bar{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+#bar i{display:block;height:100%;width:0;background:var(--amber);transition:width .2s}
+/* touch controls */
+#touch{display:none}
+.touch #touch{display:block}
+.touch #crosshair{display:none}
+#stick{position:fixed;left:calc(max(16px,env(safe-area-inset-left,0px)) + 8px);bottom:calc(96px + env(safe-area-inset-bottom,0px));width:120px;height:120px;border-radius:50%;background:rgba(18,22,21,.35);border:1px solid var(--line)}
+#knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:rgba(243,239,228,.55)}
+#tbtns{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(40px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(2,58px);gap:8px}
+#tbtns button{height:58px;border-radius:50%;padding:0;font-size:13px}
+.touch #hud-bl{bottom:calc(230px + env(safe-area-inset-bottom,0px))}
+.touch #credits{display:none}
+@media (max-width:560px){#map-wrap{width:120px;height:120px}#hud-tl h1{font-size:17px}}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+<!--ARTIFACT-HEAD-END-->
+</head>
+<body>
+<!--ARTIFACT-BODY-START-->
+<canvas id="view"></canvas>
+<div id="crosshair"></div>
+
+<div id="hud-tl" class="panel">
+  <h1>黃大仙漫步</h1>
+  <div class="sub">香港九龍 · 1 公里 × 1 公里</div>
+</div>
+
+<dl id="hud-bl" class="panel">
+  <dt>狀態</dt><dd><span id="mode" class="chip">步行</span></dd>
+  <dt>海拔</dt><dd id="alt">–</dd>
+  <dt>方向</dt><dd id="dir">–</dd>
+  <dt>座標</dt><dd id="ll">–</dd>
+</dl>
+
+<div id="hud-tr">
+  <div id="map-wrap" class="panel"><canvas id="map" width="360" height="360"></canvas><div class="hint">點地圖瞬間移動</div></div>
+  <div class="btnrow">
+    <button id="b-bridge" type="button">去天橋</button>
+    <button id="b-fly" type="button">飛行</button>
+    <button id="b-help" type="button">說明</button>
+  </div>
+</div>
+
+<div id="credits">地圖 © OpenStreetMap 貢獻者 · Overture Maps · 地形 Copernicus DEM · 衛星圖 Esri · 模型 urban:EXPORT</div>
+<div id="toast" class="panel"></div>
+
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div id="tbtns">
+    <button id="t-run" type="button">跑</button>
+    <button id="t-jump" type="button">跳</button>
+    <button id="t-up" type="button" hidden>上升</button>
+    <button id="t-down" type="button" hidden>下降</button>
+  </div>
+</div>
+
+<div id="start">
+  <div class="card panel">
+    <div class="coords">22.34115° N · 114.18933° E</div>
+    <h2>黃大仙漫步</h2>
+    <p>用第一身視角喺黃大仙一帶周圍行。腳會跟住地形上斜落斜，天橋可以由橋頭直接行上去。</p>
+    <div id="keys">
+      <span><kbd>W A S D</kbd></span><span>行（或方向鍵）</span>
+      <span><kbd>滑鼠</kbd></span><span>轉頭望</span>
+      <span><kbd>Shift</kbd></span><span>跑</span>
+      <span><kbd>空白鍵</kbd></span><span>跳</span>
+      <span><kbd>F</kbd></span><span>飛行模式（空白鍵升、C 降）</span>
+      <span><kbd>B</kbd></span><span>去下一條天橋</span>
+      <span><kbd>Esc</kbd></span><span>放返滑鼠</span>
+    </div>
+    <div id="bar"><i></i></div>
+    <button id="go" type="button" disabled>載入中…</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const $ = id => document.getElementById(id);
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (isTouch) document.documentElement.classList.add('touch');
+if (isTouch) $('keys').innerHTML = '<span><kbd>左下搖桿</kbd></span><span>行</span><span><kbd>右邊拖動</kbd></span><span>轉頭望</span><span><kbd>跑 / 跳</kbd></span><span>右下按鈕</span><span><kbd>地圖</kbd></span><span>點一下瞬間移動</span>';
+
+/* ---------- constants ---------- */
+const ORIGIN = { lat: 22.34115, lon: 114.18933 };
+const HALF = 500;
+const P = { radius: 0.35, walk: 4.5, run: 11, fly: 30, flyFast: 90, gravity: -22, jump: 6.5 };
+
+/* ---------- renderer / scene ---------- */
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const HAZE = new THREE.Color('#c9d6dc');
+scene.fog = new THREE.Fog(HAZE, 220, 1300);
+{ // sky gradient
+  const c = document.createElement('canvas'); c.width = 2; c.height = 256;
+  const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, '#5f8fb8'); gr.addColorStop(0.55, '#a9c3d3'); gr.addColorStop(1, '#d9e2e3');
+  g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; scene.background = t;
+}
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 3000);
+camera.rotation.order = 'YXZ';
+
+scene.add(new THREE.HemisphereLight('#dbe8f2', '#5b6b4a', 1.35));
+const sun = new THREE.DirectionalLight('#fff3dc', 2.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
+Object.assign(sun.shadow.camera, { left: -140, right: 140, top: 140, bottom: -140, near: 1, far: 900 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6;
+scene.add(sun, sun.target);
+const SUN_DIR = new THREE.Vector3(-0.55, 0.75, 0.36).normalize();
+
+/* ---------- loading ---------- */
+const bar = $('bar').firstElementChild;
+let loaded = 0; const step = n => { loaded += n; bar.style.width = Math.min(100, loaded) + '%'; };
+
+async function fetchBuf(url) {
+  const r = await fetch(url); if (!r.ok) throw new Error(url + ' ' + r.status);
+  return r.arrayBuffer();
+}
+const [meta, bin, satTex] = await Promise.all([
+  fetch('data/city.json').then(r => r.json()).then(j => (step(10), j)),
+  fetchBuf('data/city.bin').then(b => (step(40), b)),
+  new THREE.TextureLoader().loadAsync('data/satellite.jpg').then(t => (step(40), t)),
+]);
+const F = o => new Float32Array(bin, o[0], o[1]);
+const U = o => new Uint32Array(bin, o[0], o[1]);
+function geomOf(L) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(F(L.pos), 3));
+  g.setIndex(new THREE.BufferAttribute(U(L.idx), 1));
+  return g;
+}
+
+/* ---------- terrain with satellite ---------- */
+satTex.colorSpace = THREE.SRGBColorSpace;
+satTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const terrainG = geomOf(meta.layers.TERRAIN);
+{
+  const p = terrainG.attributes.position, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) { uv[i * 2] = (p.getX(i) + HALF) / (2 * HALF); uv[i * 2 + 1] = (HALF - p.getZ(i)) / (2 * HALF); }
+  terrainG.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  terrainG.computeVertexNormals();
+}
+const terrain = new THREE.Mesh(terrainG, new THREE.MeshLambertMaterial({ map: satTex }));
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+// a muted ground skirt so the edge of the tile doesn't float in the sky
+const skirt = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshLambertMaterial({ color: '#56664a' }));
+skirt.rotation.x = -Math.PI / 2; skirt.position.y = -2; scene.add(skirt);
+
+/* ---------- water ---------- */
+if (meta.layers.WATER) {
+  const g = geomOf(meta.layers.WATER); g.computeVertexNormals();
+  const w = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#4f93c9', polygonOffset: true, polygonOffsetFactor: -2 }));
+  w.position.y = 0.05; scene.add(w);
+}
+
+/* ---------- facade texture (floors + windows, in metres via world-space UVs) ---------- */
+function facadeTexture() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#f4f1ea'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#e4dfd4'; g.fillRect(0, 56, 64, 8);              // floor slab
+  g.fillStyle = '#7d8c99'; g.fillRect(14, 14, 36, 34);            // window
+  g.fillStyle = '#9aa9b5'; g.fillRect(14, 14, 36, 8);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
+}
+const facade = facadeTexture();
+function buildingRenderGeom(L) {
+  const g = geomOf(L).toNonIndexed(); g.computeVertexNormals();
+  const p = g.attributes.position, n = g.attributes.normal, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    const nx = n.getX(i), ny = n.getY(i), nz = n.getZ(i);
+    if (Math.abs(ny) > 0.5) { uv[i * 2] = 0.02; uv[i * 2 + 1] = 0.02; continue; }   // roofs/floors: plain
+    const tx = -nz, tz = nx, l = Math.hypot(tx, tz) || 1;
+    uv[i * 2] = (p.getX(i) * tx + p.getZ(i) * tz) / l / 3.6;
+    uv[i * 2 + 1] = p.getY(i) / 3.0;
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return g;
+}
+const CLASS_TINT = {
+  'B_cls-residential': '#efe9dd', 'B_cls-public': '#dfe7ec', 'B_cls-commercial': '#f0e2cf',
+  'B_cls-industrial': '#e2ded8', 'B_cls-utility': '#e8e6df', 'B_cls-other': '#ebe9e3',
+};
+for (const [k, L] of Object.entries(meta.layers)) {
+  if (!k.startsWith('B_')) continue;
+  const m = new THREE.Mesh(buildingRenderGeom(L), new THREE.MeshLambertMaterial({ color: CLASS_TINT[k] || '#ebe9e3', map: facade }));
+  m.castShadow = m.receiveShadow = true; scene.add(m);
+}
+
+/* ---------- bridges ---------- */
+const bridgeG = geomOf(meta.layers.BRIDGES);
+const bridgeRender = bridgeG.toNonIndexed(); bridgeRender.computeVertexNormals();
+const bridges = new THREE.Mesh(bridgeRender, new THREE.MeshLambertMaterial({ color: '#b4b3ae' }));
+bridges.castShadow = bridges.receiveShadow = true; scene.add(bridges);
+
+/* ---------- stairs added at bridge ends that float above the street ---------- */
+if (meta.layers.STAIRS && meta.layers.STAIRS.idx[1]) {
+  const g = geomOf(meta.layers.STAIRS).toNonIndexed(); g.computeVertexNormals();
+  const st = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#a9a8a2', side: THREE.DoubleSide }));
+  st.castShadow = st.receiveShadow = true; scene.add(st);
+}
+
+if (meta.layers.RAILS && meta.layers.RAILS.idx[1]) {
+  const g = geomOf(meta.layers.RAILS).toNonIndexed(); g.computeVertexNormals();
+  const rl = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#d8d6cf', side: THREE.DoubleSide }));
+  rl.castShadow = true; rl.receiveShadow = true; scene.add(rl);
+}
+
+/* ---------- trees (instanced) ---------- */
+{
+  const T = F(meta.trees), n = T.length / 5;
+  const trunkG = new THREE.CylinderGeometry(0.05, 0.07, 0.5, 6); trunkG.translate(0, 0.25, 0);
+  const crownG = new THREE.IcosahedronGeometry(0.5, 1); crownG.scale(1, 0.8, 1); crownG.translate(0, 0.62, 0);
+  const trunks = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: '#6b5a44' }), n);
+  const crowns = new THREE.InstancedMesh(crownG, new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), n);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), c = new THREE.Color();
+  const greens = ['#4f8a3a', '#5e9a42', '#3f7a35', '#6a9f4a', '#477f3c'];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++) {
+    const x = T[i * 5], y = T[i * 5 + 1], z = T[i * 5 + 2], sx = T[i * 5 + 3], sz = T[i * 5 + 4];
+    const k = 0.85 + rnd() * 0.3;
+    q.setFromAxisAngle(v.set(0, 1, 0), rnd() * 6.28);
+    m.compose(v.set(x, y - 0.2, z), q, s.set(sx * 2 * k, sz * k, sx * 2 * k));
+    trunks.setMatrixAt(i, m); crowns.setMatrixAt(i, m);
+    crowns.setColorAt(i, c.set(greens[i % greens.length]).offsetHSL(0, 0, (rnd() - 0.5) * 0.06));
+  }
+  crowns.castShadow = true; trunks.castShadow = true; crowns.receiveShadow = true;
+  scene.add(trunks, crowns);
+}
+
+/* ---------- collision world ----------
+   up-facing triangles (terrain, bridge decks, roofs) answer "what is the ground height here?"
+   near-vertical triangles (building walls, bridge sides) become 2D wall segments with a height range */
+const K_TERRAIN = 0, K_BRIDGE = 1, K_BUILDING = 2;
+const CELL = 8, GN = Math.ceil(2 * HALF / CELL) + 2;
+const cellOf = v => Math.max(0, Math.min(GN - 1, Math.floor((v + HALF) / CELL) + 1));
+const upCells = Array.from({ length: GN * GN }, () => []);
+const wallCells = Array.from({ length: GN * GN }, () => []);
+function addToCells(cells, o, minx, maxx, minz, maxz) {
+  for (let j = cellOf(minz); j <= cellOf(maxz); j++) for (let i = cellOf(minx); i <= cellOf(maxx); i++) cells[j * GN + i].push(o);
+}
+function addCollision(L, kind) {
+  const p = F(L.pos), I = U(L.idx);
+  for (let t = 0; t < I.length; t += 3) {
+    const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+    const ax = p[a], ay = p[a + 1], az = p[a + 2], bx = p[b], by = p[b + 1], bz = p[b + 2], cx = p[c], cy = p[c + 1], cz = p[c + 2];
+    const ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, nl = Math.hypot(nx, ny, nz) || 1;
+    const nyn = ny / nl;
+    const minx = Math.min(ax, bx, cx), maxx = Math.max(ax, bx, cx), minz = Math.min(az, bz, cz), maxz = Math.max(az, bz, cz);
+    if (nyn > 0.35) {
+      const den = ux * vz - vx * uz; if (Math.abs(den) < 1e-9) continue;
+      addToCells(upCells, { ax, ay, az, ux, uy, uz, vx, vy, vz, den, minx, maxx, minz, maxz, k: kind }, minx, maxx, minz, maxz);
+    } else if (Math.abs(nyn) < 0.35) {
+      // the two vertices furthest apart in plan form the wall segment
+      const pts = [[ax, az], [bx, bz], [cx, cz]]; let best = -1, s0, s1;
+      for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) { const d = (pts[i][0] - pts[j][0]) ** 2 + (pts[i][1] - pts[j][1]) ** 2; if (d > best) { best = d; s0 = pts[i]; s1 = pts[j]; } }
+      if (best < 1e-6) continue;
+      addToCells(wallCells, { x0: s0[0], z0: s0[1], x1: s1[0], z1: s1[1], lo: Math.min(ay, by, cy), hi: Math.max(ay, by, cy), stamp: 0 }, minx - 0.5, maxx + 0.5, minz - 0.5, maxz + 0.5);
+    }
+  }
+}
+addCollision(meta.layers.TERRAIN, K_TERRAIN);
+addCollision(meta.layers.BRIDGES, K_BRIDGE);
+if (meta.layers.RAMPS && meta.layers.RAMPS.idx[1]) addCollision(meta.layers.RAMPS, K_BRIDGE);
+if (meta.layers.RAILS && meta.layers.RAILS.idx[1]) addCollision(meta.layers.RAILS, K_BRIDGE);
+for (const [k, L] of Object.entries(meta.layers)) if (k.startsWith('B_')) addCollision(L, K_BUILDING);
+step(10);
+
+// highest surface at (x,z) that is not above maxY; mask picks which kinds count
+const ALL = 7, GROUND = (1 << K_TERRAIN) | (1 << K_BRIDGE);
+function surfaceAt(x, z, maxY = Infinity, mask = ALL) {
+  const cell = upCells[cellOf(z) * GN + cellOf(x)];
+  let best = -Infinity, kind = -1;
+  for (const t of cell) {
+    if (!((mask >> t.k) & 1) || x < t.minx || x > t.maxx || z < t.minz || z > t.maxz) continue;
+    const px = x - t.ax, pz = z - t.az;
+    const u = (px * t.vz - t.vx * pz) / t.den, v = (t.ux * pz - px * t.uz) / t.den;
+    if (u < -1e-6 || v < -1e-6 || u + v > 1 + 1e-6) continue;
+    const y = t.ay + u * t.uy + v * t.vy;
+    if (y <= maxY && y > best) { best = y; kind = t.k; }
+  }
+  return kind < 0 ? null : { y: best, k: kind };
+}
+let stampN = 0;
+function pushOutOfWalls(pos, lo, hi, R) {
+  for (let iter = 0; iter < 3; iter++) {
+    stampN++; let moved = false;
+    const ci = cellOf(pos.x), cj = cellOf(pos.z);
+    for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) {
+      if (i < 0 || j < 0 || i >= GN || j >= GN) continue;
+      for (const w of wallCells[j * GN + i]) {
+        if (w.stamp === stampN) continue; w.stamp = stampN;
+        if (w.hi < lo || w.lo > hi) continue;
+        const sx = w.x1 - w.x0, sz = w.z1 - w.z0, l2 = sx * sx + sz * sz;
+        let t = ((pos.x - w.x0) * sx + (pos.z - w.z0) * sz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const qx = w.x0 + sx * t, qz = w.z0 + sz * t;
+        let dx = pos.x - qx, dz = pos.z - qz; const d = Math.hypot(dx, dz);
+        if (d >= R) continue;
+        if (d < 1e-6) { dx = -sz; dz = sx; } // exactly on the line: push sideways
+        const dl = Math.hypot(dx, dz);
+        pos.x = qx + dx / dl * R; pos.z = qz + dz / dl * R; moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+}
+
+/* ---------- player (pos = feet) ---------- */
+const P2 = { eyeH: 1.62, bodyH: 1.75, stepUp: 0.6, snapDown: 0.7 };
+const player = { pos: new THREE.Vector3(), vy: 0, onGround: false, lastGround: 0, yaw: 0, pitch: -0.05, fly: false, surface: -1 };
+
+function groundAt(x, z) { const s = surfaceAt(x, z, Infinity, GROUND); return s ? s.y : null; }
+function placeAt(x, z, yaw, y) {
+  const s = surfaceAt(x, z, y != null ? y + 0.5 : Infinity, y != null ? ALL : GROUND);
+  if (!s) return false;
+  player.pos.set(x, s.y + 0.05, z); player.vy = 0; player.onGround = true;
+  if (yaw != null) player.yaw = yaw;
+  return true;
+}
+function blockedAt(x, z) {
+  const g = groundAt(x, z), top = surfaceAt(x, z);
+  return g == null || (top && top.k === K_BUILDING && top.y > g + 1);
+}
+
+const fwd = new THREE.Vector3(), right = new THREE.Vector3(), move = new THREE.Vector3();
+function physics(dt, input) {
+  fwd.set(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+  right.set(-fwd.z, 0, fwd.x);
+  move.set(0, 0, 0).addScaledVector(fwd, input.y).addScaledVector(right, input.x);
+  if (move.lengthSq() > 1) move.normalize();
+
+  if (player.fly) {
+    const s = input.run ? P.flyFast : P.fly;
+    player.pos.x += (fwd.x * input.y + right.x * input.x) * s * dt;
+    player.pos.z += (fwd.z * input.y + right.z * input.x) * s * dt;
+    player.pos.y += (input.vert + Math.sin(player.pitch) * input.y) * s * dt;
+    player.pos.y = Math.min(450, player.pos.y);
+    clampXZ();
+    const g = surfaceAt(player.pos.x, player.pos.z, player.pos.y + 2);
+    if (g && player.pos.y < g.y + 0.3) player.pos.y = g.y + 0.3;
+    return;
+  }
+
+  const speed = input.run ? P.run : P.walk;
+  const feet0 = player.pos.y;
+  player.pos.x += move.x * speed * dt;
+  player.pos.z += move.z * speed * dt;
+  clampXZ();
+  pushOutOfWalls(player.pos, feet0 + P2.stepUp - 0.05, feet0 + P2.bodyH, P.radius);
+
+  if (input.jump && player.onGround && performance.now() - player.lastJump > 350) { player.vy = P.jump; player.onGround = false; player.lastJump = performance.now(); }
+  player.vy += P.gravity * dt;
+  player.pos.y += player.vy * dt;
+
+  const s = surfaceAt(player.pos.x, player.pos.z, feet0 + P2.stepUp);
+  const wasOnGround = player.onGround;
+  player.onGround = false; player.surface = -1;
+  if (s) {
+    if (player.pos.y <= s.y || (wasOnGround && player.vy <= 0 && player.pos.y - s.y < P2.snapDown)) {
+      player.pos.y = s.y; player.vy = 0; player.onGround = true; player.surface = s.k;
+    }
+  }
+  if (player.onGround) player.lastGround = performance.now();
+  if (player.pos.y < -30) placeAt(player.pos.x, player.pos.z);
+}
+player.lastJump = 0;
+function clampXZ() {
+  const lim = HALF - 2;
+  player.pos.x = THREE.MathUtils.clamp(player.pos.x, -lim, lim);
+  player.pos.z = THREE.MathUtils.clamp(player.pos.z, -lim, lim);
+}
+
+/* ---------- bridge entrances: test-walk every end, keep one that works per bridge ---------- */
+function tryEntry(e) {
+  if (!placeAt(e.x, e.z, e.yaw, e.y)) return false;
+  const x0 = player.pos.x, z0 = player.pos.z; let t = 0;
+  for (let i = 0; i < 240; i++) {
+    physics(1 / 60, { x: 0, y: 1, run: false, jump: false, vert: 0 });
+    if (player.surface === K_BRIDGE) t++;
+  }
+  return t > 15 && Math.hypot(player.pos.x - x0, player.pos.z - z0) > 5;
+}
+const bridgeList = [];
+{
+  const byId = new Map();
+  for (const e of meta.bridges) { if (!byId.has(e.id)) byId.set(e.id, []); byId.get(e.id).push(e); }
+  for (const ends of byId.values()) { const ok = ends.find(tryEntry); if (ok) bridgeList.push(ok); }
+  bridgeList.sort((a, b) => b.len - a.len);
+}
+// spawn: in front of the most central long bridge
+const sp = [...bridgeList].filter(b => b.len >= 60).sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0] || bridgeList[0];
+placeAt(sp.x, sp.z, sp.yaw, sp.y);
+player.pitch = -0.05;
+let bridgeIdx = bridgeList.indexOf(sp);
+
+/* ---------- input ---------- */
+const keys = new Set();
+const input = { x: 0, y: 0, run: false, jump: false, vert: 0 };
+const touchState = { x: 0, y: 0, run: false, jump: false, up: false, down: false };
+let started = false;
+
+addEventListener('keydown', e => {
+  if (!started) return;
+  keys.add(e.code);
+  if (e.code === 'KeyF') toggleFly();
+  if (e.code === 'KeyB') nextBridge();
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+
+const LOOK = 0.0022;
+function look(dx, dy, k = LOOK) {
+  player.yaw -= dx * k;
+  player.pitch = THREE.MathUtils.clamp(player.pitch - dy * k, -1.45, 1.45);
+}
+// desktop: pointer lock, with drag-to-look fallback
+let dragging = false, locked = false;
+canvas.addEventListener('mousedown', () => {
+  if (!started || isTouch) return;
+  dragging = true;
+  try { const p = canvas.requestPointerLock?.(); p?.catch?.(() => {}); } catch {}
+});
+addEventListener('mouseup', () => dragging = false);
+document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; });
+addEventListener('mousemove', e => { if (locked || dragging) look(e.movementX, e.movementY); });
+
+// touch: left stick + right-side drag
+if (isTouch) {
+  const stick = $('stick'), knob = $('knob'); let stickId = null, lookId = null, lx = 0, ly = 0;
+  stick.addEventListener('touchstart', e => { stickId = e.changedTouches[0].identifier; moveStick(e.changedTouches[0]); e.preventDefault(); }, { passive: false });
+  function moveStick(t) {
+    const r = stick.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let dx = t.clientX - cx, dy = t.clientY - cy; const m = Math.hypot(dx, dy), R = r.width / 2;
+    if (m > R) { dx *= R / m; dy *= R / m; }
+    knob.style.transform = `translate(${dx}px,${dy}px)`;
+    touchState.x = dx / R; touchState.y = -dy / R;
+  }
+  canvas.addEventListener('touchstart', e => {
+    for (const t of e.changedTouches) if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
+    e.preventDefault();
+  }, { passive: false });
+  addEventListener('touchmove', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) moveStick(t);
+      if (t.identifier === lookId) { look(t.clientX - lx, t.clientY - ly, 0.005); lx = t.clientX; ly = t.clientY; }
+    }
+    e.preventDefault();
+  }, { passive: false });
+  const end = e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) { stickId = null; touchState.x = touchState.y = 0; knob.style.transform = ''; }
+      if (t.identifier === lookId) lookId = null;
+    }
+  };
+  addEventListener('touchend', end); addEventListener('touchcancel', end);
+  const hold = (id, key) => {
+    const b = $(id);
+    b.addEventListener('touchstart', e => { touchState[key] = true; e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    b.addEventListener('touchend', e => { touchState[key] = false; e.preventDefault(); }, { passive: false });
+  };
+  hold('t-jump', 'jump'); hold('t-up', 'up'); hold('t-down', 'down');
+  $('t-run').addEventListener('touchstart', e => { touchState.run = !touchState.run; $('t-run').classList.toggle('on', touchState.run); e.preventDefault(); }, { passive: false });
+}
+
+function readInput() {
+  const k = c => keys.has(c);
+  input.x = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0) + touchState.x;
+  input.y = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0) + touchState.y;
+  input.run = k('ShiftLeft') || k('ShiftRight') || touchState.run;
+  input.jump = k('Space') || touchState.jump;
+  input.vert = ((k('Space') || touchState.up) ? 1 : 0) - ((k('KeyC') || k('ControlLeft') || touchState.down) ? 1 : 0);
+}
+
+/* ---------- actions ---------- */
+let toastT;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800); }
+function toggleFly() {
+  player.fly = !player.fly; player.vy = 0; player.onGround = false;
+  if (player.fly) player.pos.y += 25;
+  $('b-fly').classList.toggle('on', player.fly);
+  $('t-up').hidden = $('t-down').hidden = !player.fly;
+  $('t-jump').hidden = player.fly;
+  toast(player.fly ? '飛行模式：空白鍵升、C 降，再按 F 落地' : '返回步行，會跌返落地面');
+}
+function nextBridge() {
+  bridgeIdx = (bridgeIdx + 1) % bridgeList.length;
+  const b = bridgeList[bridgeIdx];
+  if (player.fly) toggleFly();
+  placeAt(b.x, b.z, b.yaw, b.y);
+  player.pitch = -0.05;
+  toast(`天橋 ${bridgeIdx + 1} / ${bridgeList.length} · 長約 ${Math.round(b.len)} 米${b.stairs ? ' · 由樓梯上' : ''}`);
+}
+$('b-fly').onclick = () => { if (started) toggleFly(); };
+$('b-bridge').onclick = () => { if (started) nextBridge(); };
+$('b-help').onclick = () => { $('start').hidden = false; $('go').textContent = '繼續'; started = false; document.exitPointerLock?.(); };
+
+/* ---------- minimap ---------- */
+const mapC = $('map'), mg = mapC.getContext('2d'), satImg = satTex.image;
+function drawMap() {
+  const W = mapC.width;
+  mg.drawImage(satImg, 0, 0, W, W);
+  const px = (player.pos.x + HALF) / (2 * HALF) * W, pz = (player.pos.z + HALF) / (2 * HALF) * W;
+  mg.save(); mg.translate(px, pz); mg.rotate(-player.yaw);
+  mg.fillStyle = 'rgba(242,179,61,.28)'; mg.beginPath(); mg.moveTo(0, 0); mg.arc(0, 0, 46, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); mg.fill();
+  mg.fillStyle = '#f2b33d'; mg.strokeStyle = '#1a1404'; mg.lineWidth = 3;
+  mg.beginPath(); mg.moveTo(0, -14); mg.lineTo(9, 10); mg.lineTo(0, 5); mg.lineTo(-9, 10); mg.closePath(); mg.fill(); mg.stroke();
+  mg.restore();
+  mg.fillStyle = '#f3efe4'; mg.font = '700 22px "Noto Sans HK", sans-serif'; mg.fillText('北', W / 2 - 11, 26);
+}
+$('map-wrap').addEventListener('click', e => {
+  if (!started) return;
+  const r = mapC.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width) * 2 * HALF - HALF, z = ((e.clientY - r.top) / r.height) * 2 * HALF - HALF;
+  if (blockedAt(x, z)) { toast('嗰度係建築物，揀第二個位'); return; }
+  if (player.fly) { player.pos.x = x; player.pos.z = z; return; }
+  placeAt(x, z); toast('已經移動');
+});
+
+/* ---------- HUD ---------- */
+
+const DIRS = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'];
+let hudT = 0;
+function updateHud() {
+  const feet = player.pos.y;
+  const onBridge = !player.fly && player.surface === K_BRIDGE;
+  const running = input.run && (Math.abs(input.x) + Math.abs(input.y) > 0.1);
+  const m = $('mode');
+  m.className = 'chip' + (player.fly ? ' fly' : onBridge ? ' bridge' : running ? ' run' : '');
+  m.textContent = player.fly ? '飛行' : onBridge ? (running ? '天橋上 · 跑' : '天橋上') : running ? '跑步' : '步行';
+  $('alt').textContent = feet.toFixed(1) + ' 米';
+  let deg = ((-player.yaw * 180 / Math.PI) % 360 + 360) % 360;
+  $('dir').textContent = DIRS[Math.round(deg / 45) % 8] + ' ' + Math.round(deg) + '°';
+  const lat = ORIGIN.lat + (-player.pos.z) / 110574, lon = ORIGIN.lon + player.pos.x / (111320 * Math.cos(ORIGIN.lat * Math.PI / 180));
+  $('ll').textContent = lat.toFixed(5) + ', ' + lon.toFixed(5);
+}
+
+/* ---------- loop ---------- */
+const clock = new THREE.Clock();
+let camY = player.pos.y + P2.eyeH;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (started) {
+    readInput();
+    const N = 5; for (let i = 0; i < N; i++) physics(dt / N, input);
+  }
+  const targetY = player.pos.y + P2.eyeH;
+  camY = Math.abs(targetY - camY) > 2.5 || player.fly ? targetY : camY + (targetY - camY) * Math.min(1, dt * 14);
+  camera.position.set(player.pos.x, camY, player.pos.z);
+  camera.rotation.set(player.pitch, player.yaw, 0);
+  sun.position.copy(player.pos).addScaledVector(SUN_DIR, 400);
+  sun.target.position.copy(player.pos);
+  renderer.render(scene, camera);
+  if ((hudT += dt) > 0.1) { hudT = 0; updateHud(); drawMap(); }
+  requestAnimationFrame(frame);
+}
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+updateHud(); drawMap();
+frame();
+
+const go = $('go');
+go.disabled = false; go.textContent = isTouch ? '開始行' : '開始行（撳完會鎖定滑鼠）';
+step(100);
+go.onclick = () => {
+  $('start').hidden = true; started = true; clock.getDelta();
+  if (!isTouch) { try { const p = canvas.requestPointerLock?.(); p?.catch?.(() => {}); } catch {} }
+};
+window.__walk = { tryEntry, meta, wallCells, cellOf, GN, P2, player, scene, camera, physics, placeAt, surfaceAt, bridgeList, K_BRIDGE };
+</script>
+<!--ARTIFACT-BODY-END-->
+</body>
+</html>
