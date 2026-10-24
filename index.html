@@ -47,6 +47,7 @@ button{font:700 12px/1 var(--f-body);color:var(--ink);background:var(--glass);bo
 button:hover{border-color:var(--amber)}
 button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 button.on{background:var(--amber);color:#1a1404;border-color:var(--amber)}
+body.night #credits{color:rgba(243,239,228,.7);text-shadow:none}
 #credits{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:10px;color:rgba(20,24,22,.75);text-shadow:0 0 4px rgba(255,255,255,.6);max-width:46vw;text-align:right}
 #crosshair{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 1px rgba(0,0,0,.35);pointer-events:none}
 #toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:8px 14px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
@@ -100,11 +101,13 @@ kbd{font:500 11px var(--f-data);padding:2px 6px;border:1px solid var(--line);bor
   <div class="btnrow">
     <button id="b-bridge" type="button">去天橋</button>
     <button id="b-fly" type="button">飛行</button>
+    <button id="b-night" type="button">夜晚</button>
+    <button id="b-label" type="button" class="on">地名</button>
     <button id="b-help" type="button">說明</button>
   </div>
 </div>
 
-<div id="credits">地圖 © OpenStreetMap 貢獻者 · Overture Maps · 地形 Copernicus DEM · 衛星圖 Esri · 模型 urban:EXPORT</div>
+<div id="credits">地圖、街名及地標 © OpenStreetMap 貢獻者 · Overture Maps · 地形 Copernicus DEM · 衛星圖 Esri · 模型 urban:EXPORT</div>
 <div id="toast" class="panel"></div>
 
 <div id="touch">
@@ -129,6 +132,8 @@ kbd{font:500 11px var(--f-data);padding:2px 6px;border:1px solid var(--line);bor
       <span><kbd>空白鍵</kbd></span><span>跳</span>
       <span><kbd>F</kbd></span><span>飛行模式（空白鍵升、C 降）</span>
       <span><kbd>B</kbd></span><span>去下一條天橋</span>
+      <span><kbd>N</kbd></span><span>日間／夜晚</span>
+      <span><kbd>L</kbd></span><span>顯示／收起地名</span>
       <span><kbd>Esc</kbd></span><span>放返滑鼠</span>
     </div>
     <div id="bar"><i></i></div>
@@ -178,7 +183,7 @@ scene.fog = new THREE.Fog(HAZE, 220, 1300);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 3000);
 camera.rotation.order = 'YXZ';
 
-scene.add(new THREE.HemisphereLight('#dbe8f2', '#5b6b4a', 1.35));
+const hemi = new THREE.HemisphereLight('#dbe8f2', '#5b6b4a', 1.35); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff3dc', 2.4);
 sun.castShadow = true;
 sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
@@ -234,26 +239,39 @@ if (meta.layers.WATER) {
   w.position.y = 0.05; scene.add(w);
 }
 
-/* ---------- facade texture (floors + windows, in metres via world-space UVs) ---------- */
-function facadeTexture() {
-  const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#f4f1ea'; g.fillRect(0, 0, 64, 64);
-  g.fillStyle = '#e4dfd4'; g.fillRect(0, 56, 64, 8);              // floor slab
-  g.fillStyle = '#7d8c99'; g.fillRect(14, 14, 36, 34);            // window
-  g.fillStyle = '#9aa9b5'; g.fillRect(14, 14, 36, 8);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
+/* ---------- facade texture: 8×8 cells of floors + windows, mapped in metres via world-space UVs.
+   A matching emissive map lights a random set of windows at night. ---------- */
+const FAC_N = 8, CELL_PX = 64;
+function facadeTextures() {
+  const S = FAC_N * CELL_PX;
+  const day = document.createElement('canvas'); day.width = day.height = S; const g = day.getContext('2d');
+  const night = document.createElement('canvas'); night.width = night.height = S; const n = night.getContext('2d');
+  n.fillStyle = '#000'; n.fillRect(0, 0, S, S);
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let j = 0; j < FAC_N; j++) for (let i = 0; i < FAC_N; i++) {
+    const x = i * CELL_PX, y = j * CELL_PX;
+    g.fillStyle = '#f4f1ea'; g.fillRect(x, y, CELL_PX, CELL_PX);
+    g.fillStyle = '#e2ddd2'; g.fillRect(x, y + 56, CELL_PX, 8);                       // floor slab
+    const tint = 120 + Math.floor(rnd() * 30);
+    g.fillStyle = `rgb(${tint - 10},${tint + 2},${tint + 14})`; g.fillRect(x + 14, y + 14, 36, 34);  // window
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x + 14, y + 14, 36, 8);
+    g.fillStyle = '#d9d3c6'; g.fillRect(x + 10, y + 48, 44, 3);                        // sill
+    const r = rnd();
+    if (r < 0.36) { n.fillStyle = r < 0.27 ? '#ffc979' : '#b9cff0'; n.fillRect(x + 14, y + 14, 36, 34); }
+  }
+  const mk = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+  return { day: mk(day), night: mk(night) };
 }
-const facade = facadeTexture();
+const facade = facadeTextures();
 function buildingRenderGeom(L) {
   const g = geomOf(L).toNonIndexed(); g.computeVertexNormals();
   const p = g.attributes.position, n = g.attributes.normal, uv = new Float32Array(p.count * 2);
   for (let i = 0; i < p.count; i++) {
     const nx = n.getX(i), ny = n.getY(i), nz = n.getZ(i);
-    if (Math.abs(ny) > 0.5) { uv[i * 2] = 0.02; uv[i * 2 + 1] = 0.02; continue; }   // roofs/floors: plain
+    if (Math.abs(ny) > 0.5) { uv[i * 2] = 0.001; uv[i * 2 + 1] = 0.001; continue; }   // roofs/floors: plain wall colour
     const tx = -nz, tz = nx, l = Math.hypot(tx, tz) || 1;
-    uv[i * 2] = (p.getX(i) * tx + p.getZ(i) * tz) / l / 3.6;
-    uv[i * 2 + 1] = p.getY(i) / 3.0;
+    uv[i * 2] = (p.getX(i) * tx + p.getZ(i) * tz) / l / 3.6 / FAC_N;
+    uv[i * 2 + 1] = p.getY(i) / 3.0 / FAC_N;
   }
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   return g;
@@ -262,9 +280,12 @@ const CLASS_TINT = {
   'B_cls-residential': '#efe9dd', 'B_cls-public': '#dfe7ec', 'B_cls-commercial': '#f0e2cf',
   'B_cls-industrial': '#e2ded8', 'B_cls-utility': '#e8e6df', 'B_cls-other': '#ebe9e3',
 };
+const buildingMats = [];
 for (const [k, L] of Object.entries(meta.layers)) {
   if (!k.startsWith('B_')) continue;
-  const m = new THREE.Mesh(buildingRenderGeom(L), new THREE.MeshLambertMaterial({ color: CLASS_TINT[k] || '#ebe9e3', map: facade }));
+  const mat = new THREE.MeshLambertMaterial({ color: CLASS_TINT[k] || '#ebe9e3', map: facade.day, emissive: '#ffffff', emissiveMap: facade.night, emissiveIntensity: 0 });
+  buildingMats.push(mat);
+  const m = new THREE.Mesh(buildingRenderGeom(L), mat);
   m.castShadow = m.receiveShadow = true; scene.add(m);
 }
 
@@ -307,6 +328,189 @@ if (meta.layers.RAILS && meta.layers.RAILS.idx[1]) {
   }
   crowns.castShadow = true; trunks.castShadow = true; crowns.receiveShadow = true;
   scene.add(trunks, crowns);
+}
+
+/* ---------- street detail from OpenStreetMap: roads, markings, covered walkways, street furniture, labels ---------- */
+const D = meta.details || { signals: [], lamps: [], signs: [], shelters: [], labels: [], names: [] };
+function flatLayer(key, mat, shadows) {
+  const L = meta.layers[key]; if (!L || !L.idx[1]) return null;
+  const g = geomOf(L); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat); m.receiveShadow = true; if (shadows) m.castShadow = true;
+  scene.add(m); return m;
+}
+flatLayer('ROAD_SURF', new THREE.MeshLambertMaterial({ color: '#55585e', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+flatLayer('MARKINGS', new THREE.MeshLambertMaterial({ color: '#f1f0ea', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+flatLayer('CANOPY', new THREE.MeshLambertMaterial({ color: '#cfd3d0', side: THREE.DoubleSide }), true);
+
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _v = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+function instanced(geo, mat, list, place, shadow = true) {
+  const im = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length));
+  im.count = list.length;
+  list.forEach((it, i) => { place(it, _m); im.setMatrixAt(i, _m); });
+  im.castShadow = shadow; im.receiveShadow = true; scene.add(im); return im;
+}
+const at = (it, m, dy = 0) => m.compose(_v.set(it[0], it[1] + dy, it[2]), _q.setFromAxisAngle(_up, it[3]), _s.set(1, 1, 1));
+const metal = new THREE.MeshLambertMaterial({ color: '#6f757a' });
+const darkMetal = new THREE.MeshLambertMaterial({ color: '#2f3336' });
+
+// street lamps: pole + arm reaching over the road (local +Z) + lamp head, and a light pool for night
+const lampHeadMat = new THREE.MeshLambertMaterial({ color: '#e9e6dc', emissive: '#ffcf86', emissiveIntensity: 0 });
+{
+  const pole = new THREE.CylinderGeometry(0.07, 0.1, 8, 6); pole.translate(0, 4, 0);
+  const arm = new THREE.BoxGeometry(0.08, 0.08, 1.8); arm.translate(0, 7.9, 0.9);
+  const head = new THREE.BoxGeometry(0.35, 0.14, 0.7); head.translate(0, 7.82, 1.75);
+  instanced(pole, metal, D.lamps, at); instanced(arm, metal, D.lamps, at); instanced(head, lampHeadMat, D.lamps, at, false);
+}
+const pools = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,170,80,0.42)'); gr.addColorStop(0.45, 'rgba(255,150,60,0.14)'); gr.addColorStop(1, 'rgba(255,140,50,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  const geo = new THREE.PlaneGeometry(16, 16); geo.rotateX(-Math.PI / 2); geo.translate(0, 0.2, 1.75);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -6 });
+  const im = instanced(geo, mat, D.lamps, at, false); im.receiveShadow = false; im.visible = false; return im;
+})();
+
+// traffic signals: pole + housing with red / amber / green lamps on both faces, cycling together
+const sigMats = ['#ff3b30', '#ffb020', '#2ee06a'].map(c => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(0.18) }));
+const SIG_ON = ['#ff3b30', '#ffb020', '#2ee06a'].map(c => new THREE.Color(c)), SIG_OFF = SIG_ON.map(c => c.clone().multiplyScalar(0.16));
+{
+  const pole = new THREE.CylinderGeometry(0.06, 0.07, 3.0, 6); pole.translate(0, 1.5, 0);
+  const box = new THREE.BoxGeometry(0.34, 1.0, 0.26); box.translate(0, 3.35, 0);
+  instanced(pole, darkMetal, D.signals, at); instanced(box, darkMetal, D.signals, at);
+  [3.67, 3.35, 3.03].forEach((y, k) => {
+    const lens = new THREE.CircleGeometry(0.11, 12); lens.translate(0, y, -0.135); lens.rotateY(Math.PI);
+    const lens2 = new THREE.CircleGeometry(0.11, 12); lens2.translate(0, y, 0.135);
+    const merged = mergeSimple([lens, lens2]);
+    instanced(merged, sigMats[k], D.signals, at, false);
+  });
+}
+function mergeSimple(geos0) {
+  const geos = geos0.map(g => g.index ? g.toNonIndexed() : g);
+  let n = 0; geos.forEach(g => n += g.attributes.position.count);
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), idx = []; let o = 0;
+  for (const g0 of geos) {
+    const g = g0; g.computeVertexNormals();
+    pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3);
+    for (let i = 0; i < g.attributes.position.count; i++) idx.push(o + i);
+    o += g.attributes.position.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, o * 3), 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor.slice(0, o * 3), 3));
+  out.setIndex(idx); return out;
+}
+
+// text textures (street plates, bus stop plates, labels)
+await Promise.race([document.fonts?.load('700 48px "Noto Sans HK"').catch(() => {}), new Promise(r => setTimeout(r, 2500))]);
+const FONT = '"Noto Sans HK","PingFang HK","Microsoft JhengHei",sans-serif';
+function splitName(t) { const i = t.search(/ [A-Za-z0-9]/); return i > 0 ? [t.slice(0, i), t.slice(i + 1)] : [t, '']; }
+function plateTexture(zh, en) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 128);
+  g.strokeStyle = '#1b1b1b'; g.lineWidth = 6; g.strokeRect(6, 6, 500, 116);
+  g.fillStyle = '#111'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `700 54px ${FONT}`; g.fillText(zh, 256, en ? 50 : 64, 470);
+  if (en) { g.font = `500 26px ${FONT}`; g.fillText(en, 256, 100, 470); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+// street name plates: pole + white plate running along the street, readable from both sides
+{
+  const pole = new THREE.CylinderGeometry(0.04, 0.05, 3.0, 6); pole.translate(0, 1.5, 0);
+  instanced(pole, metal, D.signs, at);
+  const plate = new THREE.PlaneGeometry(2.0, 0.5);
+  const texCache = new Map();
+  for (const sg of D.signs) {
+    const name = D.names[sg[4]] || '';
+    if (!texCache.has(name)) { const [zh, en] = splitName(name); texCache.set(name, new THREE.MeshBasicMaterial({ map: plateTexture(zh, en) })); }
+    const mat = texCache.get(name);
+    for (const flip of [0, Math.PI]) {
+      const m = new THREE.Mesh(plate, mat);
+      m.position.set(sg[0], sg[1] + 3.15, sg[2]);
+      m.rotation.set(0, sg[3] + Math.PI / 2 + flip, 0);
+      m.translateZ(0.02); scene.add(m);
+    }
+  }
+}
+// bus shelters: roof, two posts, glass back panel; open side faces the road (local -Z)
+{
+  const roof = new THREE.BoxGeometry(4.2, 0.12, 1.9); roof.translate(0, 2.6, 0.2);
+  const posts = mergeSimple([new THREE.BoxGeometry(0.1, 2.6, 0.1).translate(-1.95, 1.3, 1.0), new THREE.BoxGeometry(0.1, 2.6, 0.1).translate(1.95, 1.3, 1.0)]);
+  const glass = new THREE.BoxGeometry(4.0, 2.0, 0.04); glass.translate(0, 1.25, 1.05);
+  const bench = new THREE.BoxGeometry(2.2, 0.08, 0.4); bench.translate(0, 0.48, 0.75);
+  const flag = new THREE.CylinderGeometry(0.04, 0.04, 2.9, 6); flag.translate(2.5, 1.45, -0.4);
+  const flagPlate = new THREE.BoxGeometry(0.06, 0.6, 0.5); flagPlate.translate(2.5, 2.6, -0.4);
+  instanced(roof, new THREE.MeshLambertMaterial({ color: '#d7dbd8' }), D.shelters, at);
+  instanced(posts, metal, D.shelters, at);
+  instanced(glass, new THREE.MeshLambertMaterial({ color: '#9fc3d6', transparent: true, opacity: 0.35 }), D.shelters, at, false);
+  instanced(bench, darkMetal, D.shelters, at);
+  instanced(flag, metal, D.shelters, at);
+  instanced(flagPlate, new THREE.MeshLambertMaterial({ color: '#f2f0e8' }), D.shelters, at);
+}
+
+// place-name labels: floating tags that show up as you get close
+const LABEL_STYLE = {
+  station: { bg: '#b8272c', fg: '#fff', range: 520, size: 1.2 },
+  temple:  { bg: '#c0561d', fg: '#fff7e6', range: 420, size: 1.15 },
+  school:  { bg: '#2f5f9e', fg: '#fff', range: 260, size: 0.95 },
+  park:    { bg: '#3f7d45', fg: '#fff', range: 320, size: 1.0 },
+  estate:  { bg: '#3b4650', fg: '#f3efe4', range: 300, size: 1.0 },
+  shop:    { bg: '#f2b33d', fg: '#1a1404', range: 70, size: 0.7 },
+  minor:   { bg: '#4a5560', fg: '#f3efe4', range: 90, size: 0.75 },
+  place:   { bg: '#59616a', fg: '#fff', range: 260, size: 0.95 },
+};
+const labels = new THREE.Group(); scene.add(labels);
+for (const [zh, en, x, y, z, kind] of D.labels) {
+  const st = LABEL_STYLE[kind] || LABEL_STYLE.place;
+  const c = document.createElement('canvas'); const g = c.getContext('2d');
+  g.font = `700 44px ${FONT}`; const w1 = g.measureText(zh).width;
+  g.font = `500 22px ${FONT}`; const w2 = en ? g.measureText(en).width : 0;
+  const W = Math.ceil(Math.min(900, Math.max(w1, w2) + 48)), H = en ? 104 : 74;
+  c.width = W; c.height = H + 18;
+  g.fillStyle = st.bg; g.beginPath(); g.roundRect(0, 0, W, H, 14); g.fill();
+  g.beginPath(); g.moveTo(W / 2 - 10, H); g.lineTo(W / 2 + 10, H); g.lineTo(W / 2, H + 16); g.fill();
+  g.fillStyle = st.fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `700 44px ${FONT}`; g.fillText(zh, W / 2, en ? 38 : H / 2 + 2, W - 30);
+  if (en) { g.font = `500 22px ${FONT}`; g.globalAlpha = 0.85; g.fillText(en, W / 2, 80, W - 30); g.globalAlpha = 1; }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+  const k = 0.035 * st.size; sp.scale.set(c.width * k, c.height * k, 1);
+  sp.center.set(0.5, 0); sp.position.set(x, y, z);
+  sp.userData = { range: st.range, k }; labels.add(sp);
+}
+let labelsOn = true;
+function updateLabels() {
+  if (!labelsOn) return;
+  for (const sp of labels.children) {
+    const d = sp.position.distanceTo(camera.position), r = sp.userData.range;
+    const a = d > r ? 0 : Math.min(1, (r - d) / (r * 0.25));
+    sp.visible = a > 0.02; sp.material.opacity = a;
+    const grow = THREE.MathUtils.clamp(d / 120, 1, 3.2);      // stay readable from afar
+    const k = sp.userData.k * grow; sp.scale.set(sp.material.map.image.width * k, sp.material.map.image.height * k, 1);
+  }
+}
+
+/* ---------- day / night ---------- */
+function gradientTex(stops) {
+  const c = document.createElement('canvas'); c.width = 2; c.height = 256; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+  stops.forEach(([o, col]) => gr.addColorStop(o, col)); g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const SKY_DAY = scene.background, SKY_NIGHT = gradientTex([[0, '#050a18'], [0.6, '#16223a'], [1, '#2c2f3c']]);
+let night = false;
+function setNight(on) {
+  night = on; document.body.classList.toggle('night', on);
+  scene.background = on ? SKY_NIGHT : SKY_DAY;
+  scene.fog.color.set(on ? '#121a2b' : '#c9d6dc'); scene.fog.near = on ? 80 : 220; scene.fog.far = on ? 900 : 1300;
+  hemi.intensity = on ? 0.32 : 1.35; hemi.color.set(on ? '#6f86b8' : '#dbe8f2');
+  sun.intensity = on ? 0.35 : 2.4; sun.color.set(on ? '#9fb4ff' : '#fff3dc');
+  renderer.toneMappingExposure = on ? 1.35 : 1.05;
+  buildingMats.forEach(m => m.emissiveIntensity = on ? 0.75 : 0);
+  lampHeadMat.emissiveIntensity = on ? 2.2 : 0;
+  pools.visible = on;
+  $('b-night').classList.toggle('on', on);
+  $('b-night').textContent = on ? '日間' : '夜晚';
 }
 
 /* ---------- collision world ----------
@@ -486,6 +690,8 @@ addEventListener('keydown', e => {
   keys.add(e.code);
   if (e.code === 'KeyF') toggleFly();
   if (e.code === 'KeyB') nextBridge();
+  if (e.code === 'KeyN') setNight(!night);
+  if (e.code === 'KeyL') toggleLabels();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => keys.delete(e.code));
@@ -575,6 +781,12 @@ function nextBridge() {
 }
 $('b-fly').onclick = () => { if (started) toggleFly(); };
 $('b-bridge').onclick = () => { if (started) nextBridge(); };
+function toggleLabels() {
+  labelsOn = !labelsOn; labels.visible = labelsOn; $('b-label').classList.toggle('on', labelsOn);
+  toast(labelsOn ? '顯示地名' : '收起地名');
+}
+$('b-night').onclick = () => setNight(!night);
+$('b-label').onclick = () => toggleLabels();
 $('b-help').onclick = () => { $('start').hidden = false; $('go').textContent = '繼續'; started = false; document.exitPointerLock?.(); };
 
 /* ---------- minimap ---------- */
@@ -633,7 +845,10 @@ function frame() {
   sun.position.copy(player.pos).addScaledVector(SUN_DIR, 400);
   sun.target.position.copy(player.pos);
   renderer.render(scene, camera);
-  if ((hudT += dt) > 0.1) { hudT = 0; updateHud(); drawMap(); }
+  if ((hudT += dt) > 0.1) { hudT = 0; updateHud(); drawMap(); updateLabels(); }
+  // traffic lights: green 9 s → amber 2 s → red 9 s
+  const ph = clock.elapsedTime % 20, lit = ph < 9 ? 2 : ph < 11 ? 1 : 0;
+  sigMats.forEach((m, k) => m.color.copy(k === lit ? SIG_ON[k] : SIG_OFF[k]));
   requestAnimationFrame(frame);
 }
 addEventListener('resize', () => {
